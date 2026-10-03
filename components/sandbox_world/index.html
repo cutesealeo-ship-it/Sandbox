@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sandbox World</title>
+<style>
+  :root {
+    --panel: rgba(16, 22, 32, 0.62);
+    --panel-solid: rgba(16, 22, 32, 0.86);
+    --border: rgba(255, 255, 255, 0.12);
+    --text: #f2f5f8;
+    --muted: rgba(242, 245, 248, 0.62);
+    --accent: #ffcf4a;
+    --danger: #ff4d4d;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #9cc8ea; color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    user-select: none; -webkit-user-select: none;
+  }
+  button { font: inherit; color: inherit; }
+  #stage, #stage canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    backdrop-filter: blur(10px) saturate(1.3); -webkit-backdrop-filter: blur(10px) saturate(1.3);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  }
+  .hidden { display: none !important; }
+
+  /* ---------- Top left: play/pause + map info ---------- */
+  #topleft { position: fixed; top: 14px; left: 14px; display: flex; align-items: center; gap: 8px; padding: 7px 10px 7px 7px; z-index: 5; }
+  #playBtn {
+    width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; flex: none;
+    background: var(--accent); color: #1b1b1b; font-size: 19px; display: grid; place-items: center;
+    box-shadow: 0 2px 10px rgba(255, 207, 74, 0.45); transition: transform .12s;
+  }
+  #playBtn:hover { transform: scale(1.06); }
+  #playBtn.paused { background: #6fdc8c; box-shadow: 0 2px 10px rgba(111, 220, 140, 0.45); }
+  #mapCard { background: none; border: 0; text-align: left; cursor: pointer; padding: 3px 6px; border-radius: 8px; min-width: 150px; }
+  #mapCard:hover { background: rgba(255, 255, 255, 0.08); }
+  #mapName { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+  #mapName .chev { font-size: 10px; color: var(--muted); }
+  #mapSave { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  #mapSave .dirty { color: var(--accent); }
+  #pausedBadge { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); padding: 6px 14px; font-size: 12px; font-weight: 700; letter-spacing: .12em; z-index: 4; }
+
+  #menu { position: fixed; top: 78px; left: 14px; width: 300px; max-height: calc(100vh - 210px); overflow-y: auto; padding: 12px; z-index: 6; background: var(--panel-solid); }
+  #menu section { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  #menu section:last-child { border-bottom: 0; }
+  #menu h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  #menu input[type=text] { width: 100%; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.08); color: var(--text); font: inherit; }
+  .btn { width: 100%; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.08); cursor: pointer; text-align: left; }
+  .btn:hover { background: rgba(255,255,255,0.16); }
+  .btn.primary { background: var(--accent); color: #1b1b1b; border-color: transparent; font-weight: 700; text-align: center; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .saveRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .saveRow:hover { background: rgba(255,255,255,0.1); }
+  .saveRow .when { font-size: 11px; color: var(--muted); }
+  .empty { font-size: 12px; color: var(--muted); }
+  .toggle { display: flex; align-items: center; justify-content: space-between; font-size: 13px; padding: 5px 0; cursor: pointer; }
+  .toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+  .range { font-size: 13px; padding: 5px 0; }
+  .range input { width: 100%; accent-color: var(--accent); }
+
+  /* ---------- Top right: statistics ---------- */
+  #stats { position: fixed; top: 14px; right: 14px; padding: 10px 14px; display: grid; grid-template-columns: repeat(3, minmax(64px, auto)); gap: 8px 16px; z-index: 5; }
+  .stat .v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+
+  /* ---------- Bottom: hotbar ---------- */
+  #hotbarWrap { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 7px; max-width: calc(100vw - 20px); z-index: 5; }
+  #slotLabel { font-size: 13px; padding: 5px 14px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); white-space: nowrap; }
+  #hotbar { display: flex; gap: 5px; padding: 7px; overflow-x: auto; max-width: 100%; }
+  .slot {
+    width: 54px; height: 62px; flex: none; border-radius: 10px; border: 2px solid transparent; position: relative;
+    background: rgba(255, 255, 255, 0.06); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px;
+  }
+  .slot:hover { background: rgba(255, 255, 255, 0.15); }
+  .slot.selected { border-color: var(--accent); background: rgba(255, 207, 74, 0.18); box-shadow: 0 0 14px rgba(255, 207, 74, 0.35); }
+  .slot canvas { width: 40px; height: 40px; }
+  .slot .emoji { font-size: 25px; height: 40px; line-height: 40px; }
+  .slot .name { font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .slot .key { position: absolute; top: 2px; left: 5px; font-size: 9px; color: var(--muted); }
+  .slot.armed { border-color: var(--danger); background: rgba(255, 77, 77, 0.35); animation: pulse .5s infinite alternate; }
+  @keyframes pulse { to { box-shadow: 0 0 18px rgba(255, 77, 77, 0.8); } }
+  .sep { width: 1px; background: var(--border); margin: 6px 3px; flex: none; }
+
+  /* ---------- Feed, hints, labels ---------- */
+  #feed { position: fixed; left: 14px; bottom: 130px; display: flex; flex-direction: column; gap: 4px; max-width: 400px; pointer-events: none; z-index: 4; }
+  .feed-item { background: rgba(16, 22, 32, 0.6); padding: 5px 10px; border-radius: 8px; font-size: 12.5px; transition: opacity .8s; }
+  #hint { position: fixed; right: 16px; top: 128px; font-size: 11px; line-height: 1.5; color: rgba(255,255,255,0.85); text-shadow: 0 1px 2px rgba(0,0,0,0.7); text-align: right; pointer-events: none; z-index: 4; }
+  #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+  .hp { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; will-change: transform; }
+  .hp .nm { font-size: 11px; font-weight: 600; text-shadow: 0 1px 2px #000; }
+  .hp .bar { width: 34px; height: 5px; background: rgba(0,0,0,0.55); border-radius: 3px; overflow: hidden; }
+  .hp .fill { height: 100%; background: #5ee05e; transition: width .2s; }
+  .pop { position: absolute; left: 0; top: 0; font-weight: 800; font-size: 15px; color: #ff5a5a; text-shadow: 0 1px 3px #000; }
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity 1.2s ease-out; z-index: 8; }
+  #error { position: fixed; inset: 0; display: grid; place-items: center; background: #1b2330; color: #fff; font-size: 15px; padding: 30px; text-align: center; z-index: 9; }
+
+  @media (max-width: 820px) {
+    #stats { grid-template-columns: repeat(2, auto); }
+    #hint { display: none; }
+  }
+</style>
+<script type="importmap">
+  { "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/" } }
+</script>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="labels"></div>
+  <div id="flash"></div>
+
+  <div id="topleft" class="panel">
+    <button id="playBtn" title="Play / Pause (Space)">⏸</button>
+    <button id="mapCard" title="Map, saves and settings">
+      <div id="mapName"><span id="mapNameText">Map</span><span class="chev">▼</span></div>
+      <div id="mapSave">Not saved yet</div>
+    </button>
+  </div>
+  <div id="pausedBadge" class="panel hidden">PAUSED</div>
+
+  <div id="menu" class="panel hidden">
+    <section>
+      <h4>Map name</h4>
+      <input id="mapNameInput" type="text" maxlength="40">
+    </section>
+    <section>
+      <button id="saveBtn" class="btn primary">💾 Save</button>
+    </section>
+    <section>
+      <h4>Load a save</h4>
+      <div id="saveList"><div class="empty">No saves yet</div></div>
+    </section>
+    <section>
+      <h4>New map</h4>
+      <div id="themeButtons" class="grid2"></div>
+    </section>
+    <section>
+      <h4>Settings</h4>
+      <label class="toggle">Block gravity <input id="setGravity" type="checkbox"></label>
+      <label class="toggle">Anchor new blocks <input id="setAnchorNew" type="checkbox"></label>
+      <label class="toggle">Humans build on their own <input id="setAutoBuild" type="checkbox"></label>
+      <label class="toggle">Sound <input id="setSound" type="checkbox"></label>
+      <div class="range">Blast radius: <b id="blastVal"></b><input id="setBlast" type="range" min="2" max="9" step="1"></div>
+    </section>
+    <section>
+      <button id="aiBtn" class="btn">🤖 Ask Claude what to build</button>
+    </section>
+  </div>
+
+  <div id="stats" class="panel"></div>
+  <div id="feed"></div>
+  <div id="hint">Click: use tool · Left-drag: rotate · Right-drag: pan<br>Scroll: zoom · Arrow keys: move · Space: play / pause · 1–0: blocks</div>
+  <div id="hotbarWrap">
+    <div id="slotLabel"></div>
+    <div id="hotbar" class="panel"></div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

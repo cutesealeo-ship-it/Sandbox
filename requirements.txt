@@ -1,0 +1,5 @@
+pygame==2.5.2
+pymunk==6.8.0
+streamlit==1.64.0
+anthropic==1.6.0
+python-dotenv==1.0.0
